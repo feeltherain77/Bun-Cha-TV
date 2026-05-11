@@ -1,7 +1,7 @@
 name: Update M3U
 on:
   schedule:
-    - cron: '*/10 * * * *' # Chạy mỗi 30 phút
+    - cron: '*/16 * * * *' # Chạy mỗi 30 phút
   workflow_dispatch: # Cho phép bấm chạy bằng tay
 
 jobs:
