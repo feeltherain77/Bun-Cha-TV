@@ -1,30 +1,41 @@
-name: Auto Grab
+name: Buncha Auto Update
 on:
   schedule:
-    - cron: '*/20 * * * *'
-  workflow_dispatch:
+    - cron: '*/20 * * * *' # Cứ 20 phút robot tự dậy nấu bún chả (quét link)
+  workflow_dispatch:      # Nút bấm tay cho Mạnh
+  push:
+    branches: [ main ]    # Mạnh cứ bấm Save là nó tự chạy luôn
+
 jobs:
-  update-gist:
+  buncha_task:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write    # Quyền này để nó tự ghi đè file list.m3u
     steps:
-      - name: Checkout
+      - name: Checkout Repo
         uses: actions/checkout@v3
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-      - name: Install dependencies
+
+      - name: Install Request
         run: pip install requests
-      - name: Run Script
+
+      - name: Run Robot Quét Link
         run: python get_link.py
-      - name: Update Gist
-        env:
-          GIST_ID: ${{ secrets.GIST_ID }}
-          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+
+      - name: Đẩy Link Lên Repo (Auto 100%)
         run: |
-          # Dùng lệnh curl để đẩy nội dung file list.m3u lên Gist
-          CONTENT=$(cat list.m3u | jq -sRr @json)
-          curl -X PATCH -H "Authorization: token $GIST_TOKEN" \
-               -H "Content-Type: application/json" \
-               -d "{\"files\": {\"list.m3u\": {\"content\": $CONTENT}}}" \
-               "https://api.github.com/gists/$GIST_ID"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Mẹo VIP: Ghi thêm thời gian vào file để GitHub thấy có sự thay đổi thực sự
+          echo "# Cập nhật lúc: $(date +'%H:%M:%S %d/%m/%Y')" >> list.m3u
+          
+          git add list.m3u
+          # Commit kèm thời gian để tránh lỗi "không có gì để update"
+          git commit -m "Bún chả tươi mới: $(date +'%H:%M %d/%m')" || exit 0
+          git push origin main
+          
