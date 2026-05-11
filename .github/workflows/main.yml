@@ -1,8 +1,8 @@
-name: Update M3U
+name: Update M3U 23m
 on:
   schedule:
-    - cron: '*/16 * * * *' # Chạy mỗi 30 phút
-  workflow_dispatch: # Cho phép bấm chạy bằng tay
+    - cron: '*/23 * * * *' # Chạy tự động mỗi 23 phút
+  workflow_dispatch:      # Nút bấm tay cho Mạnh khi MU đá
 
 jobs:
   build:
@@ -27,5 +27,5 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add live.m3u
-          git commit -m "Update link" || exit 0
+          git commit -m "Update playlist - 23m cycle" || exit 0
           git push
