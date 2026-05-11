@@ -1,32 +1,30 @@
-name: Grab Link
-
+name: Auto Grab
 on:
   schedule:
-    - cron: '*/23 * * * *' # Chạy mỗi 23 phút
-  workflow_dispatch: # Nút bấm tay
-
+    - cron: '*/20 * * * *'
+  workflow_dispatch:
 jobs:
-  build:
+  update-gist:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
-
+          python-version: '3.10'
       - name: Install dependencies
         run: pip install requests
-
-      - name: Run script
-        run: python grab.py
-
-      - name: Commit and push
+      - name: Run Script
+        run: python get_link.py
+      - name: Update Gist
+        env:
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add live.m3u
-          git commit -m "Update list at $(date)" || exit 0
-          git push
+          # Dùng lệnh curl để đẩy nội dung file list.m3u lên Gist
+          CONTENT=$(cat list.m3u | jq -sRr @json)
+          curl -X PATCH -H "Authorization: token $GIST_TOKEN" \
+               -H "Content-Type: application/json" \
+               -d "{\"files\": {\"list.m3u\": {\"content\": $CONTENT}}}" \
+               "https://api.github.com/gists/$GIST_ID"
