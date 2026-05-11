@@ -3,37 +3,35 @@ import requests, re, os
 def run():
     h = {'User-Agent': 'Mozilla/5.0'}
     b_list = ""
+    # Bước 1: Quét link Bún Chả
     try:
         r = requests.get('https://bunchatv4.net/', headers=h, timeout=15).text
-        links = re.findall(r'href="([^"]*binh-luan-vien/[^"]*)"', r)
-        for l in set(links):
+        links = list(set(re.findall(r'href="([^"]*binh-luan-vien/[^"]*)"', r)))
+        for l in links:
             if "nha-dai" in l.lower(): continue
             u = 'https://bunchatv4.net' + l if l.startswith('/') else l
             name = l.split('/')[-1].replace('-', ' ').title()
-            try:
-                d = requests.get(u, headers=h, timeout=10).text
-                s = re.findall(r'(https?://[^\s"\'<>]+?\.m3u8[^\s"\'<>]*)', d)
-                if s: b_list += f'#EXTINF:-1, [Bún Chả] {name}\n{s[0].replace("\\", "")}\n'
-            except: pass
+            d = requests.get(u, headers=h, timeout=10).text
+            s = re.findall(r'(https?://[^\s"\'<>]+?\.m3u8[^\s"\'<>]*)', d)
+            if s: b_list += f'#EXTINF:-1, [Bún Chả] {name}\n{s[0].replace("\\", "")}\n'
     except: pass
 
+    # Bước 2: Đọc list cũ (VTV, K+...)
     old = ""
     if os.path.exists('live.m3u'):
         with open('live.m3u', 'r', encoding='utf-8') as f: old = f.read()
     
+    # Bước 3: Lọc bỏ Bún Chả cũ để không bị trùng
     lines = old.split('\n')
-    new = []
-    skip = False
-    for line in lines:
-        if "#EXTINF" in line and "[Bún Chả]" in line: skip = True
-        elif skip and ("http" in line or ".m3u8" in line): skip = False
-        elif not skip: new.append(line)
-
-    final = "\n".join(new).strip() + "\n" + b_list.strip()
+    new = [line for line in lines if "[Bún Chả]" not in line and not line.startswith('http')]
+    
+    # Bước 4: Gộp lại
+    final = "#EXTM3U\n" + "\n".join([l for l in new if "#EXTM3U" not in l]).strip() + "\n" + b_list.strip()
     with open('live.m3u', 'w', encoding='utf-8') as f:
-        txt = final.strip()
-        if not txt.startswith("#EXTM3U"): txt = "#EXTM3U\n" + txt
-        f.write(txt + "\n")
+        f.write(final.strip() + "\n")
+
+if __name__ == "__main__":
+    run()
 
 if __name__ == "__main__":
     run()
