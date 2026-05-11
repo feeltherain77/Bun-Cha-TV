@@ -1,16 +1,16 @@
 name: Buncha Auto Update
 on:
   schedule:
-    - cron: '*/20 * * * *' # Cứ 20 phút robot tự dậy nấu bún chả (quét link)
+    - cron: '*/20 * * * *' # Cứ 20 phút robot tự dậy quét link
   workflow_dispatch:      # Nút bấm tay cho Mạnh
   push:
-    branches: [ main ]    # Mạnh cứ bấm Save là nó tự chạy luôn
+    branches: [ main ]    # Mạnh cứ bấm Save file là nó tự chạy luôn
 
 jobs:
   buncha_task:
     runs-on: ubuntu-latest
     permissions:
-      contents: write    # Quyền này để nó tự ghi đè file list.m3u
+      contents: write    # Quyền cực quan trọng để ghi file list.m3u
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v3
@@ -24,18 +24,21 @@ jobs:
         run: pip install requests
 
       - name: Run Robot Quét Link
-        run: python get_link.py
+        run: |
+          # Kiểm tra xem file get_link.py có tồn tại không
+          ls -R
+          python get_link.py
 
       - name: Đẩy Link Lên Repo (Auto 100%)
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Mẹo VIP: Ghi thêm thời gian vào file để GitHub thấy có sự thay đổi thực sự
+          # Mẹo VIP: Ghi thêm thời gian vào file để lừa GitHub là có thay đổi liên tục
           echo "# Cập nhật lúc: $(date +'%H:%M:%S %d/%m/%Y')" >> list.m3u
           
           git add list.m3u
-          # Commit kèm thời gian để tránh lỗi "không có gì để update"
+          # Commit kèm ngày giờ để tránh lỗi "nothing to commit"
           git commit -m "Bún chả tươi mới: $(date +'%H:%M %d/%m')" || exit 0
           git push origin main
           
