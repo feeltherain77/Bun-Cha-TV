@@ -1,39 +1,40 @@
-import requests, re, os
+import requests
+import re
 
 def run():
-    h = {'User-Agent': 'Mozilla/5.0'}
-    b_list = ""
-    # Bước 1: Quét link Bún Chả
+    # Giả lập trình duyệt để không bị web chặn
+    h = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    m3u = '#EXTM3U\n'
+    
     try:
+        # 1. Lấy danh sách BLV từ trang chủ
         r = requests.get('https://bunchatv4.net/', headers=h, timeout=15).text
-        links = list(set(re.findall(r'href="([^"]*binh-luan-vien/[^"]*)"', r)))
-        for l in links:
+        links = re.findall(r'href="([^"]*binh-luan-vien/[^"]*)"', r)
+        
+        # 2. Quét từng ông BLV (loại bỏ nhà đài)
+        for l in set(links):
             if "nha-dai" in l.lower(): continue
             u = 'https://bunchatv4.net' + l if l.startswith('/') else l
             name = l.split('/')[-1].replace('-', ' ').title()
-            d = requests.get(u, headers=h, timeout=10).text
-            s = re.findall(r'(https?://[^\s"\'<>]+?\.m3u8[^\s"\'<>]*)', d)
-            if s: b_list += f'#EXTINF:-1, [Bún Chả] {name}\n{s[0].replace("\\", "")}\n'
-    except: pass
+            
+            try:
+                # 3. Bóc link m3u8 trong trang chi tiết
+                d = requests.get(u, headers=h, timeout=10).text
+                s = re.findall(r'(https?://[^\s"\'<>]+?\.m3u8[^\s"\'<>]*)', d)
+                if s:
+                    link = s[0].replace("\\", "")
+                    m3u += f'#EXTINF:-1, [Bún Chả] {name}\n{link}\n'
+            except:
+                continue
+    except:
+        pass
 
-    # Bước 2: Đọc list cũ (VTV, K+...)
-    old = ""
-    if os.path.exists('live.m3u'):
-        with open('live.m3u', 'r', encoding='utf-8') as f: old = f.read()
-    
-    # Bước 3: Lọc bỏ Bún Chả cũ để không bị trùng
-    lines = old.split('\n')
-    new = [line for line in lines if "[Bún Chả]" not in line and not line.startswith('http')]
-    
-    # Bước 4: Gộp lại
-    final = "#EXTM3U\n" + "\n".join([l for l in new if "#EXTM3U" not in l]).strip() + "\n" + b_list.strip()
+    # 4. Ghi đè file mới hoàn toàn
     with open('live.m3u', 'w', encoding='utf-8') as f:
-        f.write(final.strip() + "\n")
+        f.write(m3u.strip() + '\n')
 
 if __name__ == "__main__":
     run()
-
-if __name__ == "__main__":
     run()
 
     # 3. Lọc bỏ các dòng Bún Chả cũ để không bị trùng link mỗi lần chạy
