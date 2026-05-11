@@ -1,39 +1,56 @@
 import requests
 import re
+import os
 
 def run():
     header = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Referer': 'https://bunchatv4.net/'
     }
-    m3u = '#EXTM3U\n'
     
+    # 1. Bóc link từ Bún Chả
+    list_buncha = ""
     try:
-        # 1. Quét trang chủ
-        content = requests.get('https://bunchatv4.net/', headers=header, timeout=15).text
-        # Tìm các link có chữ "binh-luan-vien"
-        links = re.findall(r'href="([^"]*binh-luan-vien/[^"]*)"', content)
+        home = requests.get('https://bunchatv4.net/', headers=header, timeout=15).text
+        links = re.findall(r'href="([^"]*binh-luan-vien/[^"]*)"', home)
         links = list(set([l for l in links if "nha-dai" not in l.lower()]))
         
-        if not links:
-            print("Không tìm thấy BLV nào.")
-            
         for l in links:
             url = 'https://bunchatv4.net' + l if l.startswith('/') else l
             name = l.split('/')[-1].replace('-', ' ').title()
-            
-            try:
-                # 2. Vào trang chi tiết
-                detail = requests.get(url, headers=header, timeout=10).text
-                # Regex mới: Soi tất cả những gì có đuôi .m3u8, chấp cả gạch chéo ngược
-                streams = re.findall(r'(https?://[^\s"\'<>]+?\.m3u8[^\s"\'<>]*)', detail)
-                
-                if streams:
-                    # Lấy link đầu tiên tìm được, dọn dẹp sạch sẽ
-                    clean_link = streams[0].replace("\\", "")
-                    m3u += f'#EXTINF:-1, [Royx] {name}\n{clean_link}\n'
-                    print(f"Đã húp được link của: {name}")
-            except:
+            detail = requests.get(url, headers=header, timeout=10).text
+            streams = re.findall(r'(https?://[^\s"\'<>]+?\.m3u8[^\s"\'<>]*)', detail)
+            if streams:
+                clean_link = streams[0].replace("\\", "")
+                list_buncha += f'#EXTINF:-1, [Bún Chả] {name}\n{clean_link}\n'
+    except:
+        pass
+
+    # 2. Đọc nội dung file cũ nếu có
+    old_content = ""
+    if os.path.exists('live.m3u'):
+        with open('live.m3u', 'r', encoding='utf-8') as f:
+            old_content = f.read()
+    
+    if not old_content.strip():
+        old_content = "#EXTM3U\n"
+
+    # 3. Lọc bỏ các dòng Bún Chả cũ để không bị trùng link mỗi lần chạy
+    lines = old_content.split('\n')
+    new_lines = []
+    skip = False
+    for line in lines:
+        if "#EXTINF" in line and "[Bún Chả]" in line:
+            skip = True
+            continue
+        if skip and ("http" in line or ".m3u8" in line):
+            skip = False
+            continue
+        if not skip:
+            new_lines.append(line)
+
+    # 4. Ghép nối và lưu lại
+    final_m3u = "\n".join(new_lines).strip() + "\n"
                 continue
                 
     except Exception as e:
