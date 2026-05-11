@@ -1,36 +1,43 @@
 import requests, re
 
 def run():
+    # Chứng minh thư để web không chặn
     h = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-    # Lệnh này cực quan trọng để fix lỗi "Lỗi phát kênh" trên App
-    ua_fix = '#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\n'
-    m = '#EXTM3U\n'
+    # Chuỗi User-Agent để app IPTV vượt rào
+    ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
     
-    # --- NGUỒN 1: BÚN CHẢ TV ---
+    m = '#EXTM3U\n'
     try:
-        r1 = requests.get('https://bunchatv4.net/', headers=h, timeout=15).text
-        links1 = set(re.findall(r'href="([^"]*truc-tiep/[^"]*)"', r1))
-        for l in links1:
-            u = 'https://bunchatv4.net' + l if l.startswith('/') else l
+        # 1. Lấy danh sách trận
+        r = requests.get('https://bunchatv4.net/', headers=h, timeout=15).text
+        matches = set(re.findall(r'href="([^"]*truc-tiep/[^"]*)"', r))
+        
+        for m_url in matches:
+            u = 'https://bunchatv4.net' + m_url if m_url.startswith('/') else m_url
             try:
                 d = requests.get(u, headers=h, timeout=10).text
+                
+                # 2. Bắt tên trận đấu (Lấy trong thẻ H1 hoặc Title)
+                name_match = re.search(r'<h1.*?>(.*?)</h1>', d, re.S)
+                if not name_match:
+                    name_match = re.search(r'<title>(.*?)</title>', d)
+                
+                if name_match:
+                    name = name_match.group(1).split('|')[0].replace('Trực tiếp', '').strip()
+                else:
+                    name = m_url.split('/')[-1]
+
+                # 3. Húp link m3u8
                 s = re.findall(r'(https?://[^\s"\'<>]+?\.m3u8[^\s"\'<>]*)', d)
                 if s:
-                    name = l.split('/')[-1].replace('-', ' ').title()[:30]
                     link = s[0].replace("\\", "")
-                    # Thêm group-title và UA Fix
-                    m += f'#EXTINF:-1 group-title="Bún Chả TV", [Bún Chả] {name}\n{ua_fix}{link}\n'
+                    # Cấu trúc FIX LỖI PHÁT KÊNH: Thêm trực tiếp User-Agent vào dòng INF
+                    m += f'#EXTINF:-1 group-title="Bún Chả TV" http-user-agent="{ua}", [Live] {name}\n{link}\n'
             except: continue
     except: pass
 
-    # --- NGUỒN 2: (Ông chỉ cần dán link web nguồn mới vào đây) ---
-    # Tôi sẽ làm mẫu một cấu trúc tương tự nếu ông có link Xôi Lạc...
-
-    # Ghi file
     with open('live.m3u', 'w', encoding='utf-8') as f:
         f.write(m.strip() + '\n')
 
 if __name__ == "__main__":
     run()
-
-if __name__ == "__main__": run()
