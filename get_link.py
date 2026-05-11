@@ -1,62 +1,87 @@
-import requests, re, time, random
-from urllib.parse import quote
+import requests
+import re
+from urllib.parse import quote, urljoin
 
-UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-REF = 'https://bunchatv4.net/'
+UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+BASE_URL = 'https://bunchatv4.net/'
 
-def run_grab():
-    t_hash = str(int(time.time()))
-    m3u_text = f'#EXTM3U\n'
-    h = {'User-Agent': UA, 'Referer': REF}
+# Cấu hình Logo và Nhóm tự động
+SPORTS_CONFIG = {
+    "Bóng đá": {
+        "logo": "https://nha-cai.com/wp-content/uploads/2023/11/qua-bong-da.jpg",
+        "keywords": ["bóng đá", "vđqg", "cup", "league", "united", "fc", "vs", "u23", "u19"]
+    },
+    "Tennis": {
+        "logo": "https://i.pinimg.com/originals/94/3a/0d/943a0d4948e42658f8608e906c27e02e.png",
+        "keywords": ["tennis", "quần vợt", "atp", "wta", "grand slam", "open"]
+    },
+    "Bóng rổ": {
+        "logo": "https://i.pinimg.com/originals/7b/72/70/7b7270b216f496f86c2d829983995815.png",
+        "keywords": ["bóng rổ", "nba", "basketball"]
+    }
+}
+DEFAULT_LOGO = "https://nha-cai.com/wp-content/uploads/2023/11/qua-bong-da.jpg"
+
+def get_sport_info(title):
+    title_lower = title.lower()
+    for sport, config in SPORTS_CONFIG.items():
+        if any(kw in title_lower for kw in config["keywords"]):
+            return sport, config["logo"]
+    return "Thể Thao", DEFAULT_LOGO
+
+def get_m3u():
+    m3u = "#EXTM3U\n"
+    h = {'User-Agent': UA, 'Referer': BASE_URL}
+    processed = set()
     
     try:
-        # 1. QUÉT TRANG CHỦ ĐỂ LẤY THUMBNAIL VÀ LINK TRẬN
-        r = requests.get(REF, headers=h, timeout=15).text
-        # Tìm các khối chứa: link trận + ảnh thumbnail
-        match_blocks = re.findall(r'<a[^>]*href="([^"]*truc-tiep/[^"]*)"[^>]*>.*?src="([^"]+)"', r, re.S)
+        r = requests.get(BASE_URL, headers=h, timeout=15).text
+        matches = re.findall(r'href="([^"]*(?:truc-tiep|match)/[^"]+)"', r)
         
-        # Nếu trang chủ không có ảnh, lấy tạm link trận lẻ
-        if not match_blocks:
-            links = re.findall(r'href="([^"]*truc-tiep/[^"]*)"', r)
-            match_blocks = [(l, "") for l in links]
-
-        for m_url, m_img in match_blocks:
-            full_u = REF + m_url if m_url.startswith('/') else m_url
+        for m_url in list(set(matches)):
+            full_u = urljoin(BASE_URL, m_url)
+            if full_u in processed: continue
+            
             try:
-                # Làm sạch link ảnh
-                img = m_img if m_img.startswith('http') else REF + m_img
-                
                 d = requests.get(full_u, headers=h, timeout=10).text
-                # 2. BỐC TÊN TRẬN (Dọn rác triệt để)
-                title_m = re.search(r'<title>(.*?)</title>', d, re.S)
-                name = title_m.group(1).split('|')[0].replace('Trực tiếp', '').strip() if title_m else "Bóng đá"
-                name = re.sub(r'\d{2}[nh]\d{2}(/\d{2})?', '', name).strip()
-
-                # 3. BỐC BLV & LINK STREAM (Bắt cặp để không lệch)
-                # Tìm các cụm có chứa tên (thường trong class name-player) và link m3u8
-                items = re.findall(r'class="name-player">([^<]+).*?(https?://[^\s"\'<>]+?\.m3u8[^\s"\'<>]*)', d, re.S)
+                streams = re.findall(r'(https?://[^\s"\'<>]+?\.m3u8[^\s"\'<>]*)', d)
                 
-                if not items:
-                    # Cách dự phòng nếu bắt cặp xịt
-                    streams = re.findall(r'(https?://[^\s"\'<>]+?\.m3u8[^\s"\'<>]*)', d)
-                    labels = re.findall(r'>(?:Link|Server|BLV|Kênh)\s*([^<]+)<', d, re.I)
-                    items = [(labels[i].strip() if i < len(labels) else f"S{i+1}", s) for i, s in enumerate(streams)]
-
-                for tag, link in items:
-                    tag = tag.replace('Link', '').replace('Server', '').strip()
-                    if tag.isdigit(): tag = f"S{tag}"
+                if streams:
+                    t_match = re.search(r'<title>(.*?)</title>', d)
+                    raw_title = t_match.group(1) if t_match else "Trực tiếp Thể Thao"
                     
-                    display_name = f"[{tag}] {name}"
-                    final_img = f"{img}?t={t_hash}" if img else ""
-                    # Header lách luật full
-                    final_link = f"{link.replace('\\', '')}|User-Agent={quote(UA)}&Referer={quote(REF)}&Origin={quote(REF)}"
+                    # Phân loại Logo theo môn
+                    sport_group, sport_logo = get_sport_info(raw_title)
                     
-                    m3u_text += f'#EXTINF:-1 tvg-name="{display_name}" tvg-logo="{final_img}" group-title="Bún Chả TV", {display_name}\n{final_link}\n'
+                    # Tách tên Trận và tên BLV
+                    parts = raw_title.split('|')
+                    clean_name = parts[0].replace('Trực tiếp', '').strip()
+                    blv_tag = ""
+                    if len(parts) > 1:
+                        blv_part = parts[-1].strip()
+                        if "BLV" in blv_part:
+                            blv_tag = f"[{blv_part}] "
+                    
+                    # Định dạng: [BLV Giàng A Phò] MU vs Arsenal
+                    display_name = f"{blv_tag}{clean_name}"
+                    
+                    for i, s in enumerate(streams):
+                        # Fix lỗi syntax bằng cách xử lý biến trước f-string
+                        s_clean = s.replace('\\', '')
+                        q_ua = quote(UA)
+                        q_ref = quote(full_u)
+                        
+                        final_link = f"{s_clean}|User-Agent={q_ua}&Referer={q_ref}"
+                        m3u += f'#EXTINF:-1 tvg-logo="{sport_logo}" group-title="{sport_group}", {display_name} - S{i+1}\n{final_link}\n'
             except: continue
-    except: pass
-
-    with open('live.m3u', 'w', encoding='utf-8') as f:
-        f.write(m3u_text)
+            processed.add(full_u)
+            
+    except Exception as e:
+        print(f"Lỗi: {e}")
+    
+    with open("list.m3u", "w", encoding="utf-8") as f:
+        f.write(m3u)
 
 if __name__ == "__main__":
-    run_grab()
+    get_m3u()
+    
