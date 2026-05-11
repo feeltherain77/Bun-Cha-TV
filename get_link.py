@@ -5,19 +5,24 @@ from urllib.parse import quote, urljoin
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
 BASE_URL = 'https://bunchatv4.net/'
 
-# Dùng link ảnh trực tiếp từ CDN để đảm bảo Logo luôn hiện
-LOGO_BONG_DA = "https://raw.githubusercontent.com/manh-dz/logo/main/football.png" 
-# Nếu không có link trên, dùng link dự phòng này:
-DEFAULT_LOGO = "https://i.imgur.com/8N9E0M0.png"
-
 def get_m3u():
     m3u_lines = []
     h = {'User-Agent': UA, 'Referer': BASE_URL}
     processed = set()
     
     try:
-        r = requests.get(BASE_URL, headers=h, timeout=15).text
-        matches = re.findall(r'href="([^"]*(?:truc-tiep|match)/[^"]+)"', r)
+        # 1. LẤY LOGO GỐC CỦA WEB
+        r_home = requests.get(BASE_URL, headers=h, timeout=15).text
+        # Tìm link ảnh logo (thường có chữ logo trong thẻ img)
+        logo_match = re.search(r'src="([^"]*logo[^"]*\.png[^"]*)"', r_home, re.I)
+        if logo_match:
+            web_logo = urljoin(BASE_URL, logo_match.group(1))
+        else:
+            # Link dự phòng nếu không bốc được logo động
+            web_logo = "https://bunchatv4.net/wp-content/uploads/2024/03/logo-buncha.png"
+
+        # 2. QUÉT TRẬN ĐẤU
+        matches = re.findall(r'href="([^"]*(?:truc-tiep|match)/[^"]+)"', r_home)
         
         for m_url in list(dict.fromkeys(matches))[::-1]: 
             full_u = urljoin(BASE_URL, m_url)
@@ -27,38 +32,30 @@ def get_m3u():
                 streams = re.findall(r'(https?://[^\s"\'<>]+?\.m3u8[^\s"\'<>]*)', d)
                 
                 if streams:
-                    # 1. LẤY TÊN TRẬN (Quét cực kỹ)
                     t_match = re.search(r'<title>(.*?)</title>', d)
-                    raw_title = t_match.group(1) if t_match else "Trực tiếp"
-                    clean_name = raw_title.split('|')[0].replace('Trực tiếp', '').strip()
-
-                    # 2. SĂN BLV (Quét mọi ngóc ngách trong code web)
-                    blv_tag = ""
-                    # Tìm cụm BLV kèm tên (bao gồm cả ký tự đặc biệt tiếng Việt)
-                    blv_find = re.search(r'(?:BLV|Bình luận viên)\s*:?\s*([\w\sàáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệđìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵ]+)', d, re.IGNORECASE)
+                    raw_title = t_match.group(1) if t_match else ""
                     
-                    if blv_find:
-                        tên_blv = blv_find.group(1).strip().upper()
-                        # Loại bỏ các từ thừa nếu robot bốc nhầm
-                        if len(tên_blv) < 30: # Giới hạn độ dài để tránh bốc nhầm cả đoạn văn
-                            blv_tag = f"[{tên_blv}] "
-                    elif '|' in raw_title:
-                        blv_tag = f"[{raw_title.split('|')[-1].strip().upper()}] "
+                    # LỌC TÊN TRẬN & BLV (DIỆT SẠCH RÁC CACHEP)
+                    clean_name = raw_title.split('|')[0].replace('Trực tiếp', '').split('-')[0].strip()
+                    # Chặn đứng watermark quảng cáo
+                    clean_name = re.sub(r'(CACHEPBONGDA|BUNCHATV|LIVE|VIP)', '', clean_name, flags=re.I).strip()
 
-                    # 3. GÁN LOGO & GROUP (Ép logo quả bóng)
-                    logo = LOGO_BONG_DA
-                    group = "Bóng Đá TV"
-                    if "tennis" in raw_title.lower():
-                        logo = "https://i.imgur.com/6S6W8aA.png"
-                        group = "Tennis TV"
+                    blv_tag = ""
+                    # Tìm BLV thực sự trong code, bỏ qua mấy cái tên miền quảng cáo
+                    potential = re.findall(r'BLV\s+([\w\sàáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệđìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵ]+)', d, re.I)
+                    for p in potential:
+                        p_up = p.strip().upper()
+                        if not any(x in p_up for x in ["CACHEP", "BONGDA", "BUNCHA", "LIVE", "WEB", "COM"]):
+                            if 1 < len(p_up) < 20:
+                                blv_tag = f"[{p_up}] "
+                                break
 
                     for i, s in enumerate(streams):
                         s_link = s.replace('\\', '')
-                        # ĐỊNH DẠNG CHUẨN: [BLV] Tên Trận - Link i
+                        # ĐỊNH DẠNG: [BLV] Tên trận - Link i
                         display_name = f"{blv_tag}{clean_name} - L{i+1}"
                         
-                        # Dùng cấu hình này để Logo hiện trên mọi App (OTT, Smarters, VLC...)
-                        line = f'#EXTINF:-1 tvg-logo="{logo}" group-title="{group}", {display_name}\n'
+                        line = f'#EXTINF:-1 tvg-logo="{web_logo}" group-title="Bóng Đá TV", {display_name}\n'
                         line += f'#EXTVLCOPT:http-user-agent={UA}\n'
                         line += f'#EXTVLCOPT:http-referrer={full_u}\n'
                         line += f'{s_link}'
@@ -72,3 +69,4 @@ def get_m3u():
 
 if __name__ == "__main__":
     get_m3u()
+    
