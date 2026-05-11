@@ -1,40 +1,35 @@
-import requests
-import re
-from urllib.parse import quote
+name: Update M3U 23m
+on:
+  schedule:
+    - cron: '*/23 * * * *' # Chạy tự động mỗi 23 phút
+  workflow_dispatch:      # Nút bấm tay cho Mạnh khi MU đá
 
-UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-REF = 'https://bunchatv4.net/'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-def run_grab():
-    m3u_text = '#EXTM3U\n'
-    h = {'User-Agent': UA, 'Referer': REF}
-    
-    try:
-        r = requests.get(REF, headers=h, timeout=15).text
-        links = set(re.findall(r'href="([^"]*truc-tiep/[^"]*)"', r))
-        
-        for m_url in links:
-            full_u = REF + m_url if m_url.startswith('/') else m_url
-            try:
-                d = requests.get(full_u, headers=h, timeout=10).text
-                # Tìm tất cả link m3u8 trong trang (vì một trận có thể có nhiều server/BLV)
-                stream_links = re.findall(r'(https?://[^\s"\'<>]+?\.m3u8[^\s"\'<>]*)', d)
-                
-                if stream_links:
-                    # 1. Bóc tên trận cơ bản
-                    t = re.search(r'<h1.*?>(.*?)</h1>', d, re.S)
-                    match_name = re.sub('<[^<]+?>', '', t.group(1)).strip().split('|')[0].replace('Trực tiếp', '').strip() if t else "Bóng đá"
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
 
-                    # 2. Bóc tên BLV (Thường nằm trong thẻ span hoặc class bình luận viên)
-                    # Web này hay để kiểu: "Server BLV Batman" hoặc "K+ Sport (BLV Anh Quân)"
-                    blv_list = re.findall(r'(?:BLV|Kênh|Server)[:\s]+([^<"\']+)', d)
-                    
-                    for i, link in enumerate(stream_links):
-                        raw_link = link.replace("\\", "")
-                        
-                        # Thử gán tên BLV cho từng link nếu tìm thấy
-                        blv_name = blv_list[i].strip() if i < len(blv_list) else f"Link {i+1}"
-                        
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run grabber
+        run: python grab.py
+
+      - name: Commit and Push
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add live.m3u
+          git commit -m "Update playlist - 23m cycle" || exit 0
+          git push
+
                         # Tên hiển thị cuối cùng: Tên Trận - BLV
                         display_name = f"{match_name} ({blv_name})"
                         
