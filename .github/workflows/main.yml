@@ -1,8 +1,9 @@
-name: Update M3U 23m
+name: Grab Link
+
 on:
   schedule:
-    - cron: '*/23 * * * *' # Chạy tự động mỗi 23 phút
-  workflow_dispatch:      # Nút bấm tay cho Mạnh khi MU đá
+    - cron: '*/23 * * * *' # Chạy mỗi 23 phút
+  workflow_dispatch: # Nút bấm tay
 
 jobs:
   build:
@@ -19,13 +20,13 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Run grabber
+      - name: Run script
         run: python grab.py
 
-      - name: Commit and Push
+      - name: Commit and push
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add live.m3u
-          git commit -m "Update playlist - 23m cycle" || exit 0
+          git commit -m "Update list at $(date)" || exit 0
           git push
