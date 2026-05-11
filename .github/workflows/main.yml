@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
+
 jobs:
   buncha_task:
     runs-on: ubuntu-latest
@@ -14,7 +15,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0 # Lấy đủ lịch sử để không bị lỗi push
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -31,8 +32,13 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          # Tự động gộp dữ liệu để tránh lỗi fetch first
-          git pull origin main --rebase 
+          
+          # Lệnh VIP: Dọn sạch mọi xung đột trước khi cập nhật
+          git add list.m3u
+          git stash || echo "Không có gì để cất"
+          git pull origin main --rebase
+          git stash pop || echo "Không có gì để lấy lại"
+          
           echo "# Last Update: $(date)" >> list.m3u
           git add list.m3u
           git commit -m "Auto Update Bún Chả: $(date)" || exit 0
